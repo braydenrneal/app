@@ -11,6 +11,7 @@ from typing import List, Optional
 import uuid
 from datetime import datetime
 import bcrypt
+from enum import Enum
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -28,6 +29,15 @@ api_router = APIRouter(prefix="/api")
 
 # Security
 security = HTTPBearer()
+
+# Enums
+class OrderStatus(str, Enum):
+    PENDING = "pending"
+    CONFIRMED = "confirmed"
+    PREPARING = "preparing"
+    OUT_FOR_DELIVERY = "out_for_delivery"
+    DELIVERED = "delivered"
+    CANCELLED = "cancelled"
 
 # Define Models
 class Product(BaseModel):
@@ -83,6 +93,54 @@ class Category(BaseModel):
 class CategoryCreate(BaseModel):
     name: str
     description: str
+
+class OrderItem(BaseModel):
+    product_id: str
+    product_name: str
+    product_price: float
+    quantity: int
+    subtotal: float
+
+class CustomerInfo(BaseModel):
+    name: str
+    phone: str
+    address: str
+    email: Optional[str] = None
+
+class Order(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    customer_info: CustomerInfo
+    items: List[OrderItem]
+    total_amount: float
+    status: OrderStatus = OrderStatus.PENDING
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    notes: Optional[str] = None
+    delivery_fee: float = 0.0
+
+class OrderCreate(BaseModel):
+    customer_info: CustomerInfo
+    items: List[OrderItem]
+    notes: Optional[str] = None
+
+class OrderUpdate(BaseModel):
+    status: Optional[OrderStatus] = None
+    notes: Optional[str] = None
+
+class DeliveryAddress(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    address: str
+    zone: str
+    delivery_fee: float
+    is_active: bool = True
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class DeliveryAddressCreate(BaseModel):
+    address: str
+    zone: str
+    delivery_fee: float
+
+class AddressCheckRequest(BaseModel):
+    address: str
 
 # Hash password utility
 def hash_password(password: str) -> str:
@@ -197,7 +255,93 @@ async def delete_product(product_id: str, admin: Admin = Depends(get_current_adm
         raise HTTPException(status_code=404, detail="Product not found")
     return {"message": "Product deleted successfully"}
 
-# Initialize default categories
+# Order Routes
+@api_router.post("/orders", response_model=Order)
+async def create_order(order_data: OrderCreate):
+    # Calculate delivery fee based on address
+    delivery_fee = 0.0
+    delivery_address = await db.delivery_addresses.find_one({
+        "address": {"$regex": order_data.customer_info.address, "$options": "i"},
+        "is_active": True
+    })
+    if delivery_address:
+        delivery_fee = delivery_address["delivery_fee"]
+    
+    # Calculate total
+    total_amount = sum(item.subtotal for item in order_data.items) + delivery_fee
+    
+    # Create order
+    order = Order(
+        customer_info=order_data.customer_info,
+        items=order_data.items,
+        total_amount=total_amount,
+        delivery_fee=delivery_fee,
+        notes=order_data.notes
+    )
+    
+    await db.orders.insert_one(order.dict())
+    return order
+
+@api_router.get("/orders", response_model=List[Order])
+async def get_orders(admin: Admin = Depends(get_current_admin)):
+    orders = await db.orders.find().sort("created_at", -1).to_list(1000)
+    return [Order(**order) for order in orders]
+
+@api_router.get("/orders/{order_id}", response_model=Order)
+async def get_order(order_id: str):
+    order = await db.orders.find_one({"id": order_id})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    return Order(**order)
+
+@api_router.put("/orders/{order_id}", response_model=Order)
+async def update_order(order_id: str, order_data: OrderUpdate, admin: Admin = Depends(get_current_admin)):
+    existing_order = await db.orders.find_one({"id": order_id})
+    if not existing_order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    update_data = {k: v for k, v in order_data.dict().items() if v is not None}
+    await db.orders.update_one({"id": order_id}, {"$set": update_data})
+    
+    updated_order = await db.orders.find_one({"id": order_id})
+    return Order(**updated_order)
+
+# Delivery Address Routes
+@api_router.post("/delivery-addresses", response_model=DeliveryAddress)
+async def create_delivery_address(address_data: DeliveryAddressCreate, admin: Admin = Depends(get_current_admin)):
+    address = DeliveryAddress(**address_data.dict())
+    await db.delivery_addresses.insert_one(address.dict())
+    return address
+
+@api_router.get("/delivery-addresses", response_model=List[DeliveryAddress])
+async def get_delivery_addresses(admin: Admin = Depends(get_current_admin)):
+    addresses = await db.delivery_addresses.find().to_list(1000)
+    return [DeliveryAddress(**addr) for addr in addresses]
+
+@api_router.post("/check-delivery")
+async def check_delivery_availability(request: AddressCheckRequest):
+    # Check if we deliver to this address
+    delivery_address = await db.delivery_addresses.find_one({
+        "address": {"$regex": request.address, "$options": "i"},
+        "is_active": True
+    })
+    
+    if delivery_address:
+        return {
+            "available": True,
+            "delivery_fee": delivery_address["delivery_fee"],
+            "zone": delivery_address["zone"],
+            "message": f"Great! We deliver to your area. Delivery fee: ${delivery_address['delivery_fee']:.2f}"
+        }
+    else:
+        return {
+            "available": False,
+            "delivery_fee": 0.0,
+            "zone": None,
+            "message": "Sorry, we don't currently deliver to this address. Please contact us to discuss delivery options."
+        }
+
+# Initialize default categories and addresses
 @api_router.post("/init-data")
 async def init_default_data():
     # Check if categories exist
@@ -211,6 +355,19 @@ async def init_default_data():
         ]
         for category in default_categories:
             await db.categories.insert_one(category.dict())
+    
+    # Check if delivery addresses exist
+    existing_addresses = await db.delivery_addresses.count_documents({})
+    if existing_addresses == 0:
+        default_addresses = [
+            DeliveryAddress(address="123 Mountain View Drive", zone="Zone A", delivery_fee=2.99),
+            DeliveryAddress(address="456 Peak Road", zone="Zone A", delivery_fee=2.99),
+            DeliveryAddress(address="789 Summit Lane", zone="Zone B", delivery_fee=4.99),
+            DeliveryAddress(address="321 Ridge Street", zone="Zone B", delivery_fee=4.99),
+            DeliveryAddress(address="654 Valley View", zone="Zone C", delivery_fee=6.99)
+        ]
+        for address in default_addresses:
+            await db.delivery_addresses.insert_one(address.dict())
     
     await init_default_admin()
     return {"message": "Default data initialized"}
