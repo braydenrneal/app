@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit <%= collectionName %> - Mountain Store DB Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto p-6">
+        <div class="bg-white rounded-lg shadow-lg p-6">
+            <div class="flex justify-between items-center mb-6">
+                <h1 class="text-3xl font-bold text-blue-600">✏️ Edit Document</h1>
+                <a href="/collection/<%= collectionName %>" 
+                   class="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600">
+                    ← Back to <%= collectionName %>
+                </a>
+            </div>
+
+            <form method="POST" action="/collection/<%= collectionName %>/update/<%= document.id %>">
+                <div class="mb-4">
+                    <label class="block text-sm font-bold mb-2">Document JSON:</label>
+                    <textarea name="document" 
+                              rows="20" 
+                              class="w-full p-3 border border-gray-300 rounded-lg font-mono text-sm"
+                              required><%= JSON.stringify(document, null, 2) %></textarea>
+                </div>
+                
+                <div class="flex gap-4">
+                    <button type="submit" 
+                            class="bg-green-600 text-white px-6 py-2 rounded hover:bg-green-700">
+                        Save Changes
+                    </button>
+                    <a href="/collection/<%= collectionName %>" 
+                       class="bg-gray-500 text-white px-6 py-2 rounded hover:bg-gray-600">
+                        Cancel
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</body>
+</html>
