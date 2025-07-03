@@ -743,7 +743,7 @@ const AdminDashboard = ({ adminToken }) => {
       <h2 className="text-3xl font-bold mb-6">Admin Dashboard</h2>
       
       <div className="mb-6">
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <button
             onClick={() => setActiveTab('products')}
             className={`px-4 py-2 rounded ${activeTab === 'products' ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}
@@ -762,6 +762,16 @@ const AdminDashboard = ({ adminToken }) => {
           >
             Delivery Zones
           </button>
+          <a
+            href="http://localhost:8081"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-4 py-2 rounded bg-green-600 text-white hover:bg-green-700 flex items-center gap-2"
+          >
+            <span>🍃</span>
+            Database Admin
+            <span className="text-xs">↗</span>
+          </a>
         </div>
       </div>
 
