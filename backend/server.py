@@ -326,6 +326,7 @@ async def check_delivery_availability(request: AddressCheckRequest):
         "is_active": True
     })
     
+    
     if delivery_address:
         return {
             "available": True,
