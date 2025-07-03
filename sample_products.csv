@@ -1,0 +1,5 @@
+name,description,price,category,inventory,image_url
+"Hot Cheetos","Spicy cheese puffs",3.29,"Snacks",20,"https://images.unsplash.com/photo-1621939514649-280e2ee25f60?w=400&h=400&fit=crop"
+"Pepsi Cola","Classic cola soft drink",1.99,"Drinks",30,"https://images.unsplash.com/photo-1554866585-cd94860890b7?w=400&h=400&fit=crop"
+"Reese's Peanut Butter Cups","Chocolate peanut butter candy",2.29,"Candy",25,"https://images.unsplash.com/photo-1571197150961-ed5ce3d2adc9?w=400&h=400&fit=crop"
+"Bounty Paper Towels","Absorbent paper towels",6.99,"Household",8,"https://images.unsplash.com/photo-1584464491033-06628f3a6b7b?w=400&h=400&fit=crop"
